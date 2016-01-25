@@ -62,7 +62,10 @@ class BaseCustomFilter(FieldListFilter):
             field, request, params, model, model_admin, field_path
         )
 
-        if '__' in field_path:
+        filter_title = getattr(field, '_filter_title', None)
+        if filter_title:
+            self.title = filter_title
+        elif '__' in field_path:
             self.title = '{} {}'.format(
                 field.model._meta.verbose_name,
                 self.title

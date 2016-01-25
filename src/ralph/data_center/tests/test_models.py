@@ -272,3 +272,76 @@ class DataCenterAssetTest(RalphTestCase):
     def test_get_autocomplete_queryset(self):
         queryset = DataCenterAsset.get_autocomplete_queryset()
         self.assertEquals(1, queryset.count())
+
+    def test_should_raise_validation_error_when_empty_slot_no_on_blade(self):
+        dc_asset = DataCenterAssetFactory(model__has_parent=True)
+        dc_asset.slot_no = ''
+        with self.assertRaises(ValidationError):
+            dc_asset._validate_slot_no()
+
+    def test_should_pass_when_slot_no_filled_on_blade(self):
+        dc_asset = DataCenterAssetFactory(model__has_parent=True)
+        dc_asset.slot_no = '1A'
+        dc_asset._validate_slot_no()
+
+    def test_should_pass_when_slot_not_filled_without_model(self):
+        dc_asset = DataCenterAsset()
+        dc_asset.slot_no = '1A'
+        dc_asset._validate_slot_no()
+
+
+@ddt
+class RackTest(RalphTestCase):
+    def test_get_free_u_in_empty_rack_should_return_max_u_height(self):
+        rack = RackFactory()
+        self.assertEqual(rack.get_free_u(), rack.max_u_height)
+
+    @unpack
+    @data(
+        (1, 47, 47, 0),
+        (1, 46, 47, 1),
+        (2, 45, 47, 2),
+        (47, 1, 47, 46),
+        (47, 5, 47, 46),
+    )
+    def test_get_free_u_for_one_asset(
+        self, position, height, max_u_height, expected
+    ):
+        rack = RackFactory(max_u_height=max_u_height)
+        asset_kwargs = {
+            'rack': rack,
+            'model__height_of_device': height,
+            'position': position,
+            'slot_no': None,
+            'orientation': Orientation.front.id,
+        }
+        DataCenterAssetFactory(**asset_kwargs)
+        self.assertEqual(rack.get_free_u(), expected)
+
+    def test_get_free_u_for_none_position(self):
+        rack = RackFactory(max_u_height=47)
+        asset_kwargs = {
+            'rack': rack,
+            'model__height_of_device': 47,
+            'position': None,
+            'slot_no': None,
+            'orientation': Orientation.front.id,
+        }
+        DataCenterAssetFactory(**asset_kwargs)
+        self.assertEqual(rack.get_free_u(), 47)
+
+    def test_get_free_u_should_respect_orientation(self):
+        rack = RackFactory(max_u_height=48)
+        asset_common_kwargs = {
+            'rack': rack,
+            'model__height_of_device': 1,
+            'position': 35,
+            'slot_no': None
+        }
+        DataCenterAssetFactory(
+             orientation=Orientation.front.id, **asset_common_kwargs
+        )
+        DataCenterAssetFactory(
+            orientation=Orientation.back.id, **asset_common_kwargs
+        )
+        self.assertEqual(rack.get_free_u(), 47)

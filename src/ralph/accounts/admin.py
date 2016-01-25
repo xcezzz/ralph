@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
+from string import Formatter
+from urllib.parse import quote
+
 from django.conf import settings
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group
 from django.core.urlresolvers import reverse
 from django.db.models import Q
+from django.forms.models import model_to_dict
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
 from ralph.accounts.models import RalphUser, Region, Team
 from ralph.admin import RalphAdmin, register
+from ralph.admin.helpers import getattr_dunder
 from ralph.admin.mixins import RalphAdminFormMixin
 from ralph.admin.views.extra import RalphDetailView
 from ralph.back_office.models import BackOfficeAsset
 from ralph.lib.permissions.admin import PermissionAdminMixin
 from ralph.lib.table import Table
 from ralph.lib.transitions.models import TransitionsHistory
-from ralph.licences.models import BaseObjectLicence, Licence
+from ralph.licences.models import Licence
 
 # use string for whole app (app_label) or tuple (app_label, model_name) to
 # exclude particular model
@@ -77,16 +82,20 @@ class AssetList(Table):
         return '<a href="{}">{}</a>'.format(
             reverse(
                 'admin:back_office_backofficeasset_change',
-                args=(item['id'],)
+                args=(item.id,)
             ),
             _('go to asset')
         )
     url.title = _('Link')
 
+    def buyout_date(self, item):
+        if item.model.category.show_buyout_date:
+            return item.buyout_date
+        return '&mdash;'
+    buyout_date.title = _('Buyout date')
+
     def user_licence(self, item):
-        licences = BaseObjectLicence.objects.filter(
-            base_object=item['id']
-        ).select_related('licence')
+        licences = item.licences.select_related('licence')
         if licences:
             result = [
                 '<a href="{}">{}</a><br />'.format(
@@ -102,12 +111,28 @@ class AssetList(Table):
             return []
 
     def report_failure(self, item):
+        item_dict = model_to_dict(item)
         url = settings.MY_EQUIPMENT_REPORT_FAILURE_URL
         if url:
-            if self.request and 'username' not in item:
-                item['username'] = self.request.user.username
+            placeholders = [
+                k[1] for k in Formatter().parse(url) if k[1] is not None
+            ]
+            item_dict.update({
+                k: getattr_dunder(item, k) for k in placeholders
+            })
+            if self.request and 'username' not in item_dict:
+                item_dict['username'] = self.request.user.username
+
+            def escape_param(p):
+                """
+                Escape URL param and replace quotation by unicode inches sign
+                """
+                return quote(str(p).replace('"', '\u2033'))
             return '<a href="{}" target="_blank">{}</a><br />'.format(
-                url.format(**item), _('Report failure')
+                url.format(
+                    **{k: escape_param(v) for (k, v) in item_dict.items()}
+                ),
+                _('Report failure')
             )
         return ''
     report_failure.title = ''
@@ -119,7 +144,7 @@ class AssignedLicenceList(Table):
         return '<a href="{}">{}</a>'.format(
             reverse(
                 'admin:licences_licence_change',
-                args=(item['id'],)
+                args=(item.id,)
             ),
             _('go to licence')
         )
@@ -151,7 +176,8 @@ class UserInfoMixin(object):
             self.get_asset_queryset(),
             [
                 'id', 'model__category__name', 'model__manufacturer__name',
-                'model__name', 'sn', 'barcode', 'remarks', 'status', 'url'
+                'model__name', 'sn', 'barcode', 'remarks', 'status',
+                'buyout_date', 'url'
             ],
             ['user_licence']
         )

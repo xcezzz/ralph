@@ -37,6 +37,7 @@ from ralph.data_importer import resources
 from ralph.lib.permissions.admin import PermissionAdminMixin
 from ralph.lib.transitions.admin import TransitionAdminMixin
 from ralph.licences.models import BaseObjectLicence
+from ralph.supports.models import BaseObjectsSupport
 
 
 @register(DataCenter)
@@ -66,10 +67,11 @@ class DataCenterAssetSupport(RalphDetailViewAdmin):
     url_name = 'data_center_asset_support'
 
     class DataCenterAssetSupportInline(RalphTabularInline):
-        model = DataCenterAsset.supports.related.through
+        model = BaseObjectsSupport
         raw_id_fields = ('support',)
         extra = 1
         verbose_name = _('Support')
+        ordering = ['-support__date_to']
 
     inlines = [DataCenterAssetSupportInline]
 
@@ -125,6 +127,7 @@ class DataCenterAssetAdmin(
         'status', 'barcode', 'sn', 'hostname', 'invoice_no', 'invoice_date',
         'order_no', 'model__name', 'service_env', 'depreciation_end_date',
         'force_depreciation', 'remarks', 'budget_info', 'rack__name',
+        'rack__server_room', 'rack__server_room__data_center',
         'property_of', LiquidatedStatusFilter
     ]
     date_hierarchy = 'created'

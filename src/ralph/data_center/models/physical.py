@@ -7,6 +7,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import ugettext_lazy as _
 
 from ralph.admin.sites import ralph_site
@@ -107,6 +108,8 @@ class DataCenter(NamedMixin, models.Model):
 
 class ServerRoom(NamedMixin.NonUnique, models.Model):
     data_center = models.ForeignKey(DataCenter, verbose_name=_("data center"))
+    data_center._autocomplete = False
+    data_center._filter_title = _('data center')
 
     def __str__(self):
         return '{} ({})'.format(self.name, self.data_center.name)
@@ -153,6 +156,8 @@ class Rack(AdminAbsoluteUrlMixin, NamedMixin.NonUnique, models.Model):
         null=True,
         blank=True,
     )
+    server_room._autocomplete = False
+    server_room._filter_title = _('server room')
     description = models.CharField(
         _('description'), max_length=250, blank=True
     )
@@ -190,22 +195,46 @@ class Rack(AdminAbsoluteUrlMixin, NamedMixin.NonUnique, models.Model):
     def get_root_assets(self, side=None):
         filter_kwargs = {
             'rack': self,
-            'slot_no': '',
         }
         if side:
             filter_kwargs['orientation'] = side
+        else:
+            filter_kwargs['orientation__in'] = [
+                Orientation.front, Orientation.back
+            ]
         return DataCenterAsset.objects.select_related(
             'model', 'model__category'
-        ).filter(**filter_kwargs).exclude(model__has_parent=True)
+        ).filter(
+            Q(slot_no='') | Q(slot_no=None), **filter_kwargs
+        ).exclude(model__has_parent=True)
 
     def get_free_u(self):
-        dc_assets = self.get_root_assets()
-        dc_assets_height = dc_assets.aggregate(
-            sum=models.Sum('model__height_of_device'))['sum'] or 0
-        # accesory always has 1U of height
+        u_list = [True] * self.max_u_height
         accessories = RackAccessory.objects.values_list(
-            'position', flat=True).filter(rack=self)
-        return self.max_u_height - dc_assets_height - len(set(accessories))
+            'position').filter(rack=self)
+        dc_assets = self.get_root_assets().values_list(
+            'position', 'model__height_of_device'
+        )
+
+        def fill_u_list(objects, height_of_device=lambda obj: 1):
+            for obj in objects:
+                # if position is None when objects simply does not have
+                # (assigned) position and position 0 is for some
+                # accessories (pdu) with left-right orientation and
+                # should not be included in free/filled space.
+                if obj[0] == 0 or obj[0] is None:
+                    continue
+
+                start = obj[0] - 1
+                end = min(
+                    self.max_u_height, obj[0] + int(height_of_device(obj)) - 1
+                )
+                height = end - start
+                if height:
+                    u_list[start:end] = [False] * height
+        fill_u_list(accessories)
+        fill_u_list(dc_assets, lambda obj: obj[1])
+        return sum(u_list)
 
     def get_pdus(self):
         return DataCenterAsset.objects.select_related('model').filter(
@@ -347,6 +376,12 @@ class DataCenterAsset(Asset):
             )
             raise ValidationError({'position': [msg]})
 
+    def _validate_slot_no(self):
+        if self.model_id and self.model.has_parent and not self.slot_no:
+            raise ValidationError({
+                'slot_no': 'Slot number is required when asset is blade'
+            })
+
     def clean(self):
         # TODO: this should be default logic of clean method;
         # we could register somehow validators (or take each func with
@@ -355,7 +390,8 @@ class DataCenterAsset(Asset):
         for validator in [
             super().clean,
             self._validate_orientation,
-            self._validate_position_in_rack
+            self._validate_position_in_rack,
+            self._validate_slot_no
         ]:
             try:
                 validator()

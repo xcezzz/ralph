@@ -149,11 +149,19 @@ class ManufacturerSerializer(RalphAPISerializer):
 
 
 class CategorySerializer(RalphAPISerializer):
+
+    depreciation_rate = serializers.FloatField(
+        source='get_default_depreciation_rate'
+    )
+
     class Meta:
         model = Category
 
 
 class AssetModelSerializer(RalphAPISerializer):
+
+    category = CategorySerializer()
+
     class Meta:
         model = AssetModel
 

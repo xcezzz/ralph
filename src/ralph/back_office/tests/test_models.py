@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
+from unittest.mock import patch
+
 from dj.choices import Country
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory
+from django.utils import timezone
 
 from ralph.accounts.tests.factories import RegionFactory
 from ralph.assets.country_utils import iso2_to_iso3, iso3_to_iso2
@@ -12,11 +16,13 @@ from ralph.assets.tests.factories import (
 )
 from ralph.back_office.models import BackOfficeAsset, BackOfficeAssetStatus
 from ralph.back_office.tests.factories import BackOfficeAssetFactory
+from ralph.lib.external_services import ExternalService
 from ralph.lib.transitions.models import (
     _check_instances_for_transition,
     TransitionNotAllowedError
 )
 from ralph.lib.transitions.tests import TransitionTestCase
+from ralph.reports.factories import ReportTemplateFactory
 from ralph.tests import RalphTestCase
 from ralph.tests.factories import UserFactory
 
@@ -141,13 +147,35 @@ class TestBackOfficeAsset(RalphTestCase):
             model=self.model,
             hostname='abc2',
             region=self.region_pl,
-            status=BackOfficeAssetStatus.liquidated.id
+            status=BackOfficeAssetStatus.liquidated.id,
+
         )
         self.bo_asset_3 = BackOfficeAssetFactory(
             model=self.model,
             hostname='abc3',
             region=self.region_pl,
-            status=BackOfficeAssetStatus.liquidated.id
+            status=BackOfficeAssetStatus.liquidated.id,
+            invoice_date=datetime(2016, 1, 11).date(),
+            depreciation_rate=50
+        )
+        self.bo_asset_4 = BackOfficeAssetFactory(
+            model=self.model,
+            hostname='abc3',
+            region=self.region_pl,
+            status=BackOfficeAssetStatus.liquidated.id,
+            invoice_date=datetime(2016, 1, 11).date(),
+            depreciation_end_date=datetime(2015, 1, 11).date(),
+            depreciation_rate=50
+        )
+        self.category_parent = CategoryFactory(
+            code='Mob1', default_depreciation_rate=30
+        )
+        self.category_2 = CategoryFactory(
+            code='Mob2', default_depreciation_rate=25
+        )
+        self.category_3 = CategoryFactory(
+            code='Mob3', parent=self.category_parent,
+            default_depreciation_rate=0
         )
 
     def test_try_assign_hostname(self):
@@ -195,6 +223,26 @@ class TestBackOfficeAsset(RalphTestCase):
         queryset = BackOfficeAsset.get_autocomplete_queryset()
         self.assertEquals(1, queryset.count())
 
+    def test_buyout_date(self):
+        self.assertEqual(
+            self.bo_asset_3.buyout_date,
+            datetime(2018, 2, 11).date()
+        )
+
+        self.assertEqual(
+            self.bo_asset_2.buyout_date,
+            None
+        )
+
+    def test_butout_date_with_depreciation_end_date(self):
+        self.assertEqual(
+            self.bo_asset_4.buyout_date,
+            datetime(2015, 1, 11).date()
+        )
+
+    def test_get_depreciation_rate(self):
+        self.assertEqual(self.category_2.get_default_depreciation_rate(), 25)
+        self.assertEqual(self.category_3.get_default_depreciation_rate(), 30)
 
 class TestBackOfficeAssetTransitions(TransitionTestCase, RalphTestCase):
     @classmethod
@@ -277,3 +325,26 @@ class TestBackOfficeAssetTransitions(TransitionTestCase, RalphTestCase):
         )
         with self.assertRaises(TransitionNotAllowedError):
             _check_instances_for_transition([self.bo_asset], transition)
+
+    @patch.object(ExternalService, "run")
+    def test_report_is_generated(self, mock_method):
+        GENERATED_FILE_CONTENT = REPORT_TEMPLATE = b'some-content'
+        mock_method.return_value = GENERATED_FILE_CONTENT
+        report_template = ReportTemplateFactory(template__data=REPORT_TEMPLATE)
+        request = RequestFactory().get('/')  # only request's user is important
+        request.user = UserFactory()
+        instances = [
+            BackOfficeAssetFactory(
+                user=UserFactory(first_name="James", last_name="Bond")
+            )
+        ]
+
+        attachment = BackOfficeAsset._generate_report(
+            report_template.name, request, instances, report_template.language)
+
+        correct_filename = '{}_{}-{}_{}.pdf'.format(
+            timezone.now().isoformat()[:10], 'james', 'bond',
+            report_template.report.name,
+        )
+        self.assertEqual(attachment.original_filename, correct_filename)
+        self.assertEqual(attachment.file.read(), GENERATED_FILE_CONTENT)

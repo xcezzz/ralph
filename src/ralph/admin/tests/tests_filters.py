@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import datetime
 
-from django.test import TestCase
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import RequestFactory, TestCase
 
+from ralph.accounts.tests.factories import UserFactory
 from ralph.admin.filters import (
     BooleanListFilter,
     ChoicesListFilter,
@@ -10,11 +12,13 @@ from ralph.admin.filters import (
     DateListFilter,
     LiquidatedStatusFilter,
     NumberListFilter,
+    RelatedAutocompleteFieldListFilter,
     RelatedFieldListFilter,
     TagsListFilter,
     TextListFilter
 )
-from ralph.data_center.admin import DataCenterAssetAdmin
+from ralph.admin.sites import ralph_site
+from ralph.data_center.admin import DataCenterAssetAdmin, ServerRoomAdmin
 from ralph.data_center.models.physical import (
     DataCenterAsset,
     DataCenterAssetStatus,
@@ -27,6 +31,8 @@ from ralph.data_center.tests.factories import (
 from ralph.supports.admin import SupportAdmin
 from ralph.supports.models import Support
 from ralph.supports.tests.factories import SupportFactory
+from ralph.tests.admin import Car2Admin, CarAdmin
+from ralph.tests.models import Car, Car2
 
 
 class AdminFiltersTestCase(TestCase):
@@ -58,6 +64,12 @@ class AdminFiltersTestCase(TestCase):
         )
         cls.support_1 = SupportFactory(price=10)
         cls.support_2 = SupportFactory(price=100)
+
+    def add_session_to_request(self, request):
+        """Annotate a request object with a session"""
+        middleware = SessionMiddleware()
+        middleware.process_request(request)
+        request.session.save()
 
     def test_date_format_to_human(self):
         self.assertEqual('YYYY-MM-DD', date_format_to_human('%Y-%m-%d'))
@@ -300,3 +312,41 @@ class AdminFiltersTestCase(TestCase):
         self.assertEqual(queryset.count(), 2)
         self.assertIn(self.dca_1, queryset)
         self.assertIn(self.dca_2, queryset)
+    
+    def test_filter_title(self):
+        related_filter = RelatedFieldListFilter(
+            field=Car._meta.get_field('manufacturer'),
+            request=None,
+            params={
+                'manufacturer': 1,
+            },
+            model=Car,
+            model_admin=CarAdmin,
+            field_path='manufacturer'
+        )
+        self.assertEqual('test', related_filter.title)
+
+    def test_is_not_autocomplete(self):
+        list_filter = CarAdmin.list_filter
+        CarAdmin.list_filter = ['manufacturer']
+        request = RequestFactory().get('/')
+        request.user = UserFactory(is_superuser=True, is_staff=True)
+        self.add_session_to_request(request)
+        car_admin = CarAdmin(Car, ralph_site)
+        change_list = car_admin.changelist_view(request)
+        filters = change_list.context_data['cl'].get_filters(request)
+
+        self.assertTrue(isinstance(filters[0][0], RelatedFieldListFilter))
+        CarAdmin.list_filter = list_filter
+
+    def test_is_autocomplete(self):
+        request = RequestFactory().get('/')
+        request.user = UserFactory(is_superuser=True, is_staff=True)
+        self.add_session_to_request(request)
+        car_admin = Car2Admin(Car2, ralph_site)
+        change_list = car_admin.changelist_view(request)
+        filters = change_list.context_data['cl'].get_filters(request)
+
+        self.assertTrue(isinstance(
+            filters[0][0], RelatedAutocompleteFieldListFilter)
+        )

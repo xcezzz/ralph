@@ -1,4 +1,3 @@
-sudo: required
 language: python
 
 env:
@@ -6,8 +5,18 @@ env:
         - DATABASE_USER=travis
         - DATABASE_PASSWORD=travis
     matrix:
-        - TEST_DB_ENGINE=mysql
-        - TEST_DB_ENGINE=sqlite
+        - DJANGO_VERSION=1.8.8 TEST_DB_ENGINE=sqlite
+        - DJANGO_VERSION=1.8.8 TEST_DB_ENGINE=mysql
+        - DJANGO_VERSION=1.8.8 TEST_DB_ENGINE=psql
+        - DJANGO_VERSION=1.9 TEST_DB_ENGINE=sqlite
+        - DJANGO_VERSION=1.9 TEST_DB_ENGINE=mysql
+        - DJANGO_VERSION=1.9 TEST_DB_ENGINE=psql
+
+matrix:
+  allow_failures:
+    - env: DJANGO_VERSION=1.9 TEST_DB_ENGINE=mysql
+    - env: DJANGO_VERSION=1.9 TEST_DB_ENGINE=sqlite
+    - env: DJANGO_VERSION=1.9 TEST_DB_ENGINE=psql
 
 services:
     - docker
@@ -27,6 +36,11 @@ before_install:
     - export RALPH_VERSION=$(cat VERSION)
     - export NEW_TAG=$RALPH_VERSION-snapshot-$(date "+%Y%m%d")-$TRAVIS_BUILD_NUMBER
     - if [[ $TEST_DB_ENGINE == mysql ]]; then docker run -d -v $(pwd)/docker/mysql.cnf:/etc/mysql/conf.d/mysql.cnf -p "3306:3306" -e "MYSQL_ALLOW_EMPTY_PASSWORD=yes" -e "MYSQL_DATABASE=ralph_ng" -e "MYSQL_ROOT_PASSWORD=root" -e "MYSQL_USER=travis" -e "MYSQL_PASSWORD=travis" mysql:5.6; fi
+    - if [[ $TEST_DB_ENGINE == psql ]]; then
+        export DATABASE_PORT=5433;
+        docker run -d -p "$DATABASE_PORT:5432" -e "POSTGRES_USER=travis" -e "POSTGRES_PASSWORD=travis" -e "POSTGRES_DB=ralph_ng" postgres:9.4;
+        pip install psycopg2;
+        fi
 
 install:
     - npm config set python /usr/bin/python2.7
@@ -35,6 +49,7 @@ install:
     - gulp
     - make install-test
     - pip install coveralls
+    - pip install django==$DJANGO_VERSION
 
 script:
     - gulp test
