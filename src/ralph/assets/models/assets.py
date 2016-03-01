@@ -153,6 +153,13 @@ class AssetModel(
         default=ModelVisualizationLayout().na.id,
         blank=True,
     )
+
+    root_password = models.TextField(
+        verbose_name=_('Root Password'),
+        blank=True,
+        null=True
+    )
+
     # Used in the visualization Data Center as is_blade
     has_parent = models.BooleanField(default=False)
 

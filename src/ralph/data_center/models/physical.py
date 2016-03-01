@@ -270,6 +270,15 @@ class DataCenterAsset(Asset):
         choices=Orientation(),
         default=Orientation.front.id,
     )
+
+    root_password = models.CharField(
+        blank=True,
+        help_text=_('Root Password'),
+        max_length=255,
+        null=True,
+        verbose_name=_('Root PW'),
+    )
+
     slot_no = models.CharField(
         blank=True,
         help_text=_('Fill it if asset is blade server'),
