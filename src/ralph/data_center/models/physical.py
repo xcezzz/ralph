@@ -27,6 +27,10 @@ from ralph.lib.mixins.fields import (
     NullableCharField,
     NullableGenericIPAddressField
 )
+
+from ralph.assets.models.assets import BaseObject
+from ralph.assets.models.assets import AssetExtra
+
 from ralph.lib.mixins.models import AdminAbsoluteUrlMixin
 from ralph.lib.transitions.decorators import transition_action
 from ralph.lib.transitions.fields import TransitionField
@@ -256,7 +260,6 @@ class Rack(AdminAbsoluteUrlMixin, NamedMixin.NonUnique, models.Model):
             orientation__in=(Orientation.left, Orientation.right),
             position=0,
         )
-
 
 class DataCenterAsset(Asset):
 

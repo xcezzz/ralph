@@ -11,6 +11,10 @@ from ralph.data_center.models.physical import (
     RackAccessory,
     ServerRoom
 )
+from ralph.api.serializers import AdditionalLookupRelatedField
+from ralph.assets.models.assets import (
+    AssetExtra,
+)
 
 TYPE_EMPTY = 'empty'
 TYPE_ACCESSORY = 'accessory'
@@ -58,6 +62,14 @@ class ServerRoomtSerializer(serializers.ModelSerializer):
         )
 
 
+class AssetExtraSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssetExtra
+        fields = (
+            'id', 'remarks', 'content', 'content_type'
+        )
+        depth = 1
+
 class RelatedAssetSerializer(DataCenterAssetSerializerBase):
 
     class Meta:
@@ -67,6 +79,16 @@ class RelatedAssetSerializer(DataCenterAssetSerializerBase):
             'orientation', 'url',
         )
 
+
+class DataCenterAssetExtraSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = AssetExtra
+        fields = (
+            'remarks', 'content','content_type'
+        )
+
+from pprint import pprint
 
 class DataCenterAssetSerializer(DataCenterAssetSerializerBase):
     category = serializers.CharField(source='model.category.name')
@@ -84,6 +106,22 @@ class DataCenterAssetSerializer(DataCenterAssetSerializerBase):
     orientation = serializers.SerializerMethodField('get_orientation_desc')
     url = serializers.CharField(source='get_absolute_url')
 
+    asset_extras = serializers.SerializerMethodField() #AssetExtraSerializer(source='get_asset_extras') #
+
+    # asset_extras = AdditionalLookupRelatedField(
+    #     many=True, read_only=False, queryset=AssetExtra.objects.filter(parent=self.object).all(),
+    # )
+
+    def get_asset_extras(self, obj):
+        extras = AssetExtra.objects.select_related('parent').filter(
+            parent=obj
+        ) or []
+        output = []
+        for i in extras:
+            output.append({'remarks': i.remarks, 'content': i.content, 'content_type': str(i.content_type)})
+
+        return output
+
     def get_type(self, obj):
         return TYPE_ASSET
 
@@ -96,7 +134,7 @@ class DataCenterAssetSerializer(DataCenterAssetSerializerBase):
             'id', 'model', 'category', 'height', 'front_layout',
             'back_layout', 'barcode', 'sn', 'position',
             'children', '_type', 'hostname', 'management_ip',
-            'orientation', 'service', 'remarks', 'url',
+            'orientation', 'service', 'remarks', 'url', 'asset_extras'
         )
 
 

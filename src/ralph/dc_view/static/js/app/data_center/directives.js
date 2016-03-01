@@ -3,6 +3,23 @@
 
     angular
         .module('data_center.directives', ['rack.services'])
+        .filter('unsafe', function($sce) {
+            return function(val) {
+                return $sce.trustAsHtml(val);
+            };
+        })
+        .directive('assetExtra', ['$document', function($document){
+            return {
+                restrict: 'E',
+                templateUrl: '/static/partials/rack/device_types/extra_data.html',
+                scope: {
+                    extra: '='
+                },
+                link: function(scope, element){
+                    console.log()
+                }
+            }
+        }])
         .directive('rackTop', ['$document', 'RackModel', function ($document, RackModel) {
             return {
                 restrict: 'E',

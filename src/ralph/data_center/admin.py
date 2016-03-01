@@ -34,8 +34,14 @@ from ralph.data_center.models.physical import (
     RackAccessory,
     ServerRoom
 )
+
+from ralph.assets.models.assets import (
+    AssetExtra,
+)
+
 from ralph.data_center.models.virtual import Database, VIP
 from ralph.data_center.views.ui import DataCenterAssetSecurityInfo
+from ralph.data_center.views.ui import DataCenterAssetExtraInfo
 from ralph.data_importer import resources
 from ralph.lib.permissions.admin import PermissionAdminMixin
 from ralph.lib.transitions.admin import TransitionAdminMixin
@@ -120,6 +126,22 @@ class DataCenterAssetOperation(OperationViewReadOnlyForExisiting):
     inlines = OperationViewReadOnlyForExisiting.admin_class.inlines
 
 
+class DataCenterAssetExtras(RalphDetailViewAdmin):
+    icon = 'refresh'
+    name = 'dc_extras'
+    label = _('Edit Extra Data')
+    url_name = 'datacenter_extras'
+
+    class DataCenterAssetExtrasInline(RalphTabularInline):
+        model = AssetExtra
+        verbose_name = _('Asset Extra Data')
+        raw_id_fields = ('model',)
+        fk_name = 'parent'
+        extra = 1
+
+    inlines = [DataCenterAssetExtrasInline]
+
+
 @register(DataCenterAsset)
 class DataCenterAssetAdmin(
     MulitiAddAdminMixin,
@@ -133,8 +155,10 @@ class DataCenterAssetAdmin(
     """Data Center Asset admin class."""
     actions = ['bulk_edit_action']
     change_views = [
+        DataCenterAssetExtraInfo,
         DataCenterAssetComponents,
         DataCenterAssetSecurityInfo,
+        DataCenterAssetExtras,
         DataCenterAssetLicence,
         DataCenterAssetSupport,
         DataCenterAssetOperation,

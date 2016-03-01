@@ -1,0 +1,30 @@
+{% extends BASE_TEMPLATE %}
+{% load i18n %}
+
+{% block bodyclass %}extras-tab{% endblock%}
+
+{% block view_content %}
+
+<h1>{% trans "Extra Info" %}</h1>
+<div class="large-12 columns">
+  <h3>{% trans "Extra Info" %}</h3>
+  {% if asset_extras %}
+    <table class="full">
+      <thead>
+        <th>{% trans "Remark" %}</th>
+        <th>{% trans "Content" %}</th>
+      </thead>
+      {% for v in asset_extras %}
+      <tr>
+        <td>{{ v.remarks }}</td>
+        <td>{{ v.content|safe }}</td>
+        <!--<td>{ v.get_risk_display|default:"-" }</td>-->
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>{% trans "No extra data found for this asset." %}</p>
+  {% endif %}
+</div>
+
+{% endblock %}

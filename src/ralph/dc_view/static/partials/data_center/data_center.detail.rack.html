@@ -44,6 +44,21 @@
                 {{ activeItem ? activeItem.remarks : '-' }}
             </td>
         </tr>
+
+        <tr>
+            <td>Extra Data</td>
+            <td>
+                <div class="extra-data" ng-show="activeItem.asset_extras.length">
+                    <div ng-repeat="(index, extra) in activeItem.asset_extras">
+                        <asset-extra extra="extra"></extra-data>
+                    </div>
+                </div>
+                <div class="extra-data none" ng-hide="activeItem.asset_extras.length">
+                    No Data
+                </div>
+            </td>
+        </tr>
+
         <tr>
             <td colspan="2">
                 <span ng-show="activeItem">

@@ -112,6 +112,13 @@ class Manufacturer(NamedMixin, TimeStampMixin, models.Model):
     pass
 
 
+class AssetExtra(BaseObject):
+    content = models.TextField(
+        verbose_name=_('Extra Content'),
+        blank=True,
+        null=True
+    )
+
 class AssetModel(
     PermByFieldMixin,
     NamedMixin.NonUnique,
